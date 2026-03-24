@@ -1,6 +1,3 @@
-#!/bin/bash
-# adjust-dwl-config.sh - Dynamic dwl configuration adjuster
-
 set -e
 
 CONFIG_H="${1:-config.h}"
