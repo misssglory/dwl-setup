@@ -3,11 +3,21 @@
 , fetchFromGitHub
 , pkg-config
 , wayland
+, wayland-scanner
 , wayland-protocols
-, wlroots  # This will be passed from the flake
+, wlroots
 , libxcb
 , libX11
 , xwayland
+, xorg
+, xcbutilwm
+, libxkbcommon
+, pixman
+, libpng
+, libGL
+, mesa
+, udev
+, libinput
 , src
 , enableXWayland ? true
 , gawk
@@ -21,17 +31,55 @@ stdenv.mkDerivation {
   
   inherit src;
   
-  nativeBuildInputs = [ pkg-config gawk ];
+  nativeBuildInputs = [
+    pkg-config
+    wayland-scanner
+    gawk
+  ];
   
   buildInputs = [
     wayland
     wayland-protocols
-    wlroots  # Use the specific version passed from flake
+    wlroots
+    libxkbcommon
+    libxcb
+    xorg.libxcb
+    xcbutilwm
+    pixman
+    libpng
+    libGL
+    mesa
+    udev
+    libinput
   ] ++ lib.optionals enableXWayland [
     libX11
-    libxcb
     xwayland
   ];
+  
+  # Set up build environment
+  preBuild = ''
+    # Ensure wayland-scanner is in PATH
+    export PATH="${wayland-scanner}/bin:$PATH"
+    
+    # Set PKG_CONFIG_PATH to find all required packages
+    export PKG_CONFIG_PATH="${wlroots}/lib/pkgconfig:${libxkbcommon}/lib/pkgconfig:${xcbutilwm}/lib/pkgconfig:${libxcb}/lib/pkgconfig:${pixman}/lib/pkgconfig:${libpng}/lib/pkgconfig:${libGL}/lib/pkgconfig:${mesa}/lib/pkgconfig:${udev}/lib/pkgconfig:${libinput}/lib/pkgconfig:$PKG_CONFIG_PATH"
+    
+    echo "PKG_CONFIG_PATH: $PKG_CONFIG_PATH"
+    echo "Checking critical dependencies:"
+    for dep in wlroots xkbcommon xcb-icccm pixman-1 libpng gl mesa; do
+      if pkg-config --exists $dep 2>/dev/null; then
+        echo "✓ $dep found ($(pkg-config --modversion $dep))"
+      else
+        echo "✗ $dep missing"
+      fi
+    done
+    
+    # Set include paths for compilation
+    export NIX_CFLAGS_COMPILE="$NIX_CFLAGS_COMPILE -I${pixman}/include/pixman-1"
+    export NIX_CFLAGS_COMPILE="$NIX_CFLAGS_COMPILE -I${wlroots}/include/wlroots-0.18"
+    export NIX_CFLAGS_COMPILE="$NIX_CFLAGS_COMPILE -I${libxkbcommon}/include"
+    export NIX_CFLAGS_COMPILE="$NIX_CFLAGS_COMPILE -I${libxcb}/include"
+  '';
   
   postPatch = ''
     echo "=== dwl build: Dynamic resolution adjustment ==="
@@ -42,16 +90,17 @@ stdenv.mkDerivation {
       echo "Found adjustment script, making executable..."
       chmod +x adjust-dwl-config.sh
       
-      # Make sure we have the required tools in PATH during build
+      # Make tools available in PATH
       export PATH="${gawk}/bin:${wlr-randr}/bin:${xrandr}/bin:$PATH"
       
       echo "Running configuration adjustment..."
-      ./adjust-dwl-config.sh config.h
       
-      if [ $? -eq 0 ]; then
+      # Run the script with timeout to avoid hanging
+      if timeout 30 ./adjust-dwl-config.sh config.h 2>&1; then
         echo "✅ Configuration successfully adjusted"
       else
-        echo "⚠️  Adjustment script failed, using original config.h"
+        echo "⚠️  Adjustment script failed or timed out"
+        echo "Using original config.h without modifications"
       fi
     else
       echo "⚠️  No adjustment script found, using original config.h"
@@ -83,5 +132,6 @@ stdenv.mkDerivation {
     homepage = "https://github.com/misssglory/dwl-setup";
     license = licenses.gpl3Only;
     platforms = platforms.linux;
+    maintainers = with maintainers; [ misssglory ];
   };
 }

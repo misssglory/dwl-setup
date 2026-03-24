@@ -17,14 +17,19 @@ detect_resolution() {
         res=$(wlr-randr 2>/dev/null | grep -A 1 "eDP-1" | grep "current" | awk '{print $1}')
     fi
     
-    # Try xrandr (X11)
+    # Try xrandr (X11) - look for any connected display
     if [ -z "$res" ] && command -v xrandr &> /dev/null; then
         res=$(xrandr 2>/dev/null | grep " connected" | grep -oP '\d+x\d+' | head -n1)
     fi
     
-    # Try reading from sysfs
-    if [ -z "$res" ] && [ -f "/sys/class/drm/card0-eDP-1/modes" ]; then
-        res=$(head -n1 /sys/class/drm/card0-eDP-1/modes 2>/dev/null | grep -oP '\d+x\d+')
+    # Try reading from sysfs (for laptop displays)
+    if [ -z "$res" ]; then
+        for mode in /sys/class/drm/*/modes; do
+            if [ -f "$mode" ]; then
+                res=$(head -n1 "$mode" 2>/dev/null | grep -oP '\d+x\d+')
+                [ -n "$res" ] && break
+            fi
+        done
     fi
     
     # Default fallback
@@ -36,10 +41,17 @@ detect_resolution() {
     echo "$res"
 }
 
-# Function to calculate values using awk
+# Function to calculate values using awk with error handling
 calculate_values() {
     local width=$1
     local height=$2
+    
+    # Validate input
+    if [ -z "$width" ] || [ -z "$height" ] || [ "$width" -eq 0 ] || [ "$height" -eq 0 ]; then
+        log_message "ERROR: Invalid resolution: width=$width, height=$height"
+        echo "1.0 1.0 1.0"
+        return
+    fi
     
     awk -v w="$width" -v h="$height" '
     BEGIN {
@@ -52,12 +64,16 @@ calculate_values() {
         if (scale < 0.5) scale = 0.5
         if (scale > 2.5) scale = 2.5
         
-        # Calculate total pixels
+        # Calculate total pixels (ensure no division by zero)
         total_pixels = w * h
         reference_pixels = 1920 * 1080
         
         # Mouse speed (inverse square root of pixel ratio)
-        mouse_speed = sqrt(reference_pixels / total_pixels) * 1.2
+        if (total_pixels > 0) {
+            mouse_speed = sqrt(reference_pixels / total_pixels) * 1.2
+        } else {
+            mouse_speed = 1.0
+        }
         if (mouse_speed < 0.5) mouse_speed = 0.5
         if (mouse_speed > 2.0) mouse_speed = 2.0
         
@@ -85,15 +101,31 @@ main() {
     RESOLUTION=$(detect_resolution)
     log_message "Detected resolution: $RESOLUTION"
     
-    # Parse resolution
-    WIDTH=$(echo "$RESOLUTION" | cut -d'x' -f1)
-    HEIGHT=$(echo "$RESOLUTION" | cut -d'x' -f2)
+    # Parse resolution safely
+    if [[ "$RESOLUTION" =~ ([0-9]+)x([0-9]+) ]]; then
+        WIDTH="${BASH_REMATCH[1]}"
+        HEIGHT="${BASH_REMATCH[2]}"
+        log_message "Parsed resolution: ${WIDTH}x${HEIGHT}"
+    else
+        log_message "ERROR: Failed to parse resolution: $RESOLUTION"
+        WIDTH="1920"
+        HEIGHT="1080"
+        log_message "Using fallback resolution: ${WIDTH}x${HEIGHT}"
+    fi
     
     # Calculate values
     VALUES=$(calculate_values "$WIDTH" "$HEIGHT")
     SCALE=$(echo "$VALUES" | awk '{print $1}')
     MOUSE_SPEED=$(echo "$VALUES" | awk '{print $2}')
     ACCEL_SPEED=$(echo "$VALUES" | awk '{print $3}')
+    
+    # Validate calculated values
+    if [ -z "$SCALE" ] || [ -z "$MOUSE_SPEED" ] || [ -z "$ACCEL_SPEED" ]; then
+        log_message "ERROR: Failed to calculate values"
+        SCALE="1.0"
+        MOUSE_SPEED="1.0"
+        ACCEL_SPEED="1.0"
+    fi
     
     # Log calculations
     log_message ""
@@ -116,31 +148,46 @@ main() {
     cp "$CONFIG_H" "$BACKUP_FILE"
     log_message "Backup created: $BACKUP_FILE"
     
-    # Update monitor configuration
+    # Update monitor configuration for eDP-1
+    log_message "Updating eDP-1 monitor configuration..."
     if grep -q "eDP-1" "$CONFIG_H"; then
-        sed -i "s/\({\s*\"eDP-1\"\s*,\s*\)[0-9.]\+f\(,\s*[0-9]\+,\s*\)[0-9.]\+f\(,\s*&layouts\[0\],.*\)/\1${SCALE}f\2${MOUSE_SPEED}f\3/" "$CONFIG_H"
-        log_message "✓ eDP-1 line updated"
+        # More robust sed pattern
+        sed -i.tmp \
+            -e "s/\({\s*\"eDP-1\"\s*,\s*\)[0-9.]\+f\(,\s*[0-9]\+,\s*\)[0-9.]\+f\(,\s*&layouts\[0\],.*\)/\1${SCALE}f\2${MOUSE_SPEED}f\3/" \
+            "$CONFIG_H" && log_message "✓ eDP-1 line updated" || log_message "⚠️ Failed to update eDP-1 line"
+        rm -f "${CONFIG_H}.tmp"
+    else
+        log_message "WARNING: eDP-1 not found in config.h"
     fi
     
     # Update accel_speed
+    log_message "Updating accel_speed value..."
     if grep -q "accel_speed" "$CONFIG_H"; then
-        sed -i "s/static const double accel_speed = [0-9.]\+;/static const double accel_speed = ${ACCEL_SPEED};/" "$CONFIG_H"
-        log_message "✓ accel_speed updated"
+        sed -i.tmp "s/static const double accel_speed = [0-9.]\+;/static const double accel_speed = ${ACCEL_SPEED};/" "$CONFIG_H" && \
+            log_message "✓ accel_speed updated" || log_message "⚠️ Failed to update accel_speed"
+        rm -f "${CONFIG_H}.tmp"
+    else
+        log_message "WARNING: accel_speed not found in config.h"
     fi
     
     # Verify changes
     log_message ""
     log_message "=== Verification ==="
-    log_message "Updated eDP-1 line:"
-    grep -n "eDP-1" "$CONFIG_H" | head -1
-    log_message "Updated accel_speed line:"
-    grep -n "accel_speed" "$CONFIG_H" | head -1
+    if grep -q "eDP-1" "$CONFIG_H"; then
+        log_message "Updated eDP-1 line:"
+        grep -n "eDP-1" "$CONFIG_H" | head -1 | tee -a "$LOG_FILE"
+    fi
+    if grep -q "accel_speed" "$CONFIG_H"; then
+        log_message "Updated accel_speed line:"
+        grep -n "accel_speed" "$CONFIG_H" | head -1 | tee -a "$LOG_FILE"
+    fi
     
     log_message ""
     log_message "=== Configuration Complete ==="
     log_message "Scale: ${SCALE}f"
     log_message "Mouse speed: ${MOUSE_SPEED}f"
     log_message "Acceleration: $ACCEL_SPEED"
+    log_message "Log saved to: $LOG_FILE"
     
     exit 0
 }
