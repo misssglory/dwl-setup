@@ -11,21 +11,25 @@
       let
         pkgs = nixpkgs.legacyPackages.${system};
         
-        # The main dwl package
+        # Use wlroots 0.18 specifically
+        wlroots_0_18 = pkgs.wlroots_0_18 or (pkgs.wlroots.override {
+          # Ensure we're using version 0.18
+          version = "0.18.0";
+        });
+        
+        # The main dwl package with specific wlroots version
         dwl = pkgs.callPackage ./dwl.nix {
           inherit (self) src;
-          # Pass any build-time options
+          wlroots = wlroots_0_18;
           enableXWayland = true;
         };
         
       in {
-        # The main package output
         packages = {
           inherit dwl;
           default = dwl;
         };
         
-        # For development shell (optional)
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [
             gawk
@@ -34,7 +38,7 @@
             pkg-config
             wayland
             wayland-protocols
-            wlroots
+            wlroots_0_18
           ];
         };
       }

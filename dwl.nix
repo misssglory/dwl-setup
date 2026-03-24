@@ -4,7 +4,7 @@
 , pkg-config
 , wayland
 , wayland-protocols
-, wlroots
+, wlroots  # This will be passed from the flake
 , libxcb
 , libX11
 , xwayland
@@ -26,18 +26,18 @@ stdenv.mkDerivation {
   buildInputs = [
     wayland
     wayland-protocols
-    wlroots
+    wlroots  # Use the specific version passed from flake
   ] ++ lib.optionals enableXWayland [
     libX11
     libxcb
     xwayland
   ];
   
-  # We'll use the adjustment script from the source
   postPatch = ''
     echo "=== dwl build: Dynamic resolution adjustment ==="
+    echo "Using wlroots version: ${wlroots.version or "unknown"}"
     
-    # Check if adjustment script exists in the source
+    # Check if adjustment script exists
     if [ -f adjust-dwl-config.sh ]; then
       echo "Found adjustment script, making executable..."
       chmod +x adjust-dwl-config.sh
@@ -83,6 +83,5 @@ stdenv.mkDerivation {
     homepage = "https://github.com/misssglory/dwl-setup";
     license = licenses.gpl3Only;
     platforms = platforms.linux;
-    maintainers = with maintainers; [ misssglory ];
   };
 }
