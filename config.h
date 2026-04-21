@@ -154,7 +154,7 @@ static const char *menucmd[] = { "fuzzel", NULL };
 static const char *clearnotiscmd[] = { "makoctl", "dismiss", NULL };
 static const char *clearallnotiscmd[] = { "makoctl", "dismiss", "-a", NULL };
 static const char *cliphistcmd[] = {
-    "cliphist-fuzzel-img-smart",
+    "cliphist-fuzzel-rich",
     NULL
 };
 
