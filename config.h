@@ -71,7 +71,7 @@ static const Layout layouts[] = {
 /* NOTE: ALWAYS add a fallback rule, even if you are completely sure it won't be used */
 static const MonitorRule monrules[] = {
 	/* name       mfact  nmaster scale layout       rotate/reflect                x    y */
-	{ "eDP-1",    0.5f,  1,      1.5f,    &layouts[0], WL_OUTPUT_TRANSFORM_NORMAL,   -1,  -1 },
+	{ "eDP-1",    0.9f,  1,      1.3f,    &layouts[0], WL_OUTPUT_TRANSFORM_NORMAL,   -1,  -1 },
 	/*{ "eDP-1",    0.5f,  1,      2,    &layouts[0], WL_OUTPUT_TRANSFORM_NORMAL,   -1,  -1 }, */
 	/* defaults 
 	{ NULL,       0.55f, 1,      1,    &layouts[0], WL_OUTPUT_TRANSFORM_NORMAL,   -1,  -1 },
@@ -127,7 +127,8 @@ LIBINPUT_CONFIG_ACCEL_PROFILE_FLAT
 LIBINPUT_CONFIG_ACCEL_PROFILE_ADAPTIVE
 */
 static const enum libinput_config_accel_profile accel_profile = LIBINPUT_CONFIG_ACCEL_PROFILE_ADAPTIVE;
-static const double accel_speed = 0.8;
+static const double accel_speed = 0.7;
+// Adjusted for 1706x1066 on 2026-03-24
 
 /* You can choose between:
 LIBINPUT_CONFIG_TAP_MAP_LRM -- 1/2/3 finger tap maps to left/right/middle
@@ -152,6 +153,10 @@ static const char *termcmd[] = { "alacritty", NULL };
 static const char *menucmd[] = { "fuzzel", NULL };
 static const char *clearnotiscmd[] = { "makoctl", "dismiss", NULL };
 static const char *clearallnotiscmd[] = { "makoctl", "dismiss", "-a", NULL };
+static const char *cliphistcmd[] = {
+    "cliphist-fuzzel-img-smart",
+    NULL
+};
 
 static const Key keys[] = {
 	/* Note that Shift changes certain key codes: c -> C, 2 -> at, etc. */
@@ -160,6 +165,7 @@ static const Key keys[] = {
 	{ MODKEY|WLR_MODIFIER_SHIFT, XKB_KEY_Return,     spawn,          {.v = termcmd} },
 	{ MODKEY,                    XKB_KEY_w,          spawn,          {.v = clearnotiscmd} },
 	{ MODKEY|WLR_MODIFIER_SHIFT, XKB_KEY_W,          spawn,          {.v = clearallnotiscmd} },
+    { MODKEY,                    XKB_KEY_v,          spawn,          {.v = cliphistcmd } },
 	{ MODKEY,                    XKB_KEY_j,          focusstack,     {.i = +1} },
 	{ MODKEY,                    XKB_KEY_k,          focusstack,     {.i = -1} },
 	{ MODKEY,                    XKB_KEY_Left,       focusstack,     {.i = +1} },
