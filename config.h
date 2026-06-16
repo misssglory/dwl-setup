@@ -159,17 +159,14 @@ static const char *cliphistcmd[] = {
 };
 
 static const char *ocrcmd[] = {
-    "sh", "-c",
-    "curl -sS -X POST http://127.0.0.1:4490/capture "
-    ">/tmp/screen-ocr-last.json "
-    "2>/tmp/screen-ocr-last.err",
+    "curl", "-sS", "-X", "POST", "http://127.0.0.1:4490/capture",
     NULL
 };
 
 static const Key keys[] = {
 	/* Note that Shift changes certain key codes: c -> C, 2 -> at, etc. */
 	/* modifier                  key                 function        argument */
-    { MODKEY|WLR_MODIFIER_SHIFT, XKB_KEY_o, spawn, {.v = ocrcmd} },
+    { MODKEY|WLR_MODIFIER_SHIFT, XKB_KEY_O,          spawn,          {.v = ocrcmd} },
 	{ MODKEY,                    XKB_KEY_s,          spawn,          {.v = menucmd} },
 	{ MODKEY|WLR_MODIFIER_SHIFT, XKB_KEY_Return,     spawn,          {.v = termcmd} },
 	{ MODKEY,                    XKB_KEY_w,          spawn,          {.v = clearnotiscmd} },
